@@ -1,0 +1,120 @@
+Dependency
+
+<dependency>
+    <groupId>org.jsoup</groupId>
+    <artifactId>jsoup</artifactId>
+    <version>1.15.3</version>
+</dependency>
+
+Java code
+
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
+
+import java.io.IOException;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.List;
+
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpHandler;
+import com.sun.net.httpserver.HttpServer;
+
+public class TimeStoriesServer {
+
+    private static final String TIME_URL = "https://time.com";
+
+    public static void main(String[] args) throws Exception {
+        HttpServer server = HttpServer.create(new InetSocketAddress(8000), 0);
+        server.createContext("/getTimeStories", new TimeStoriesHandler());
+        server.setExecutor(null); // creates a default executor
+        System.out.println("Starting server on port 8000...");
+        server.start();
+    }
+
+    static class TimeStoriesHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            String response = fetchAndParseTimeStories();
+            exchange.sendResponseHeaders(200, response.getBytes().length);
+            OutputStream os = exchange.getResponseBody();
+            os.write(response.getBytes());
+            os.close();
+        }
+
+        private String fetchAndParseTimeStories() {
+            List<Story> stories = new ArrayList<>();
+            try {
+                Document doc = Jsoup.connect(TIME_URL).get();
+                Elements articles = doc.select("h3.latest-stories__headline a");
+                for (Element article : articles) {
+                    if (stories.size() >= 6) break;
+                    String title = article.text();
+                    String link = article.attr("href");
+                    stories.add(new Story(title, TIME_URL + link));
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
+            // Convert stories list to JSON format
+            StringBuilder jsonBuilder = new StringBuilder();
+            jsonBuilder.append("[");
+            for (int i = 0; i < stories.size(); i++) {
+                Story story = stories.get(i);
+                jsonBuilder.append("{")
+                        .append("\"title\": \"").append(story.title).append("\",")
+                        .append("\"link\": \"").append(story.link).append("\"")
+                        .append("}");
+                if (i < stories.size() - 1) {
+                    jsonBuilder.append(",");
+                }
+            }
+            jsonBuilder.append("]");
+            return jsonBuilder.toString();
+        }
+    }
+
+    static class Story {
+        String title;
+        String link;
+
+        Story(String title, String link) {
+            this.title = title;
+            this.link = link;
+        }
+    }
+}
+
+Output:
+[
+  {
+    "title": "Amy Schneider's Jeopardy! Streak Ends at 40 Consecutive Wins and $1.4 Million",
+    "link": "https://time.com/6142934/amy-schneider-jeopardy-streak-ends/"
+  },
+  {
+    "title": "Writing With Fire' Shines a Light on All-Women News Outlet",
+    "link": "https://time.com/6142628/writing-with-fire-india-documentary/"
+  },
+  {
+    "title": "Moderna Booster May Wane After 6 Months",
+    "link": "https://time.com/6142852/moderna-booster-wanes-omicron/"
+  },
+  {
+    "title": "Pressure Mounts for Biden to Nominate a Black Woman to the Supreme",
+    "link": "https://time.com/6142743/joe-biden-supreme-court-nominee-black-woman-campaign-promise/"
+  },
+  {
+    "title": "The James Webb Space Telescope Is in Position-And Now We Wait",
+    "link": "https://time.com/6142769/james-webb-space-telescope-reaches-12/"
+  },
+  {
+    "title": "We Urgently Need a New National COVID-19 Response Plan",
+    "link": "https://time.com/6142718/we-need-new-national-covid-19-response-plan/"
+  }
+]
